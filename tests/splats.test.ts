@@ -27,6 +27,7 @@ describe('Gaussian splat rendering data', () => {
     const { material } = meshIn(scene)
     const texture = material.uniforms.uSplats.value as THREE.DataTexture
     const texels = texture.image.data
+    if (!texels) throw new Error("Missing splat data texture")
     expect(Array.from(texels.slice(0, 9))).toEqual([1, 2, 3, 0.75, 0.25, 0.5, 2, 0, 1])
     expect(texels[9]).toBeCloseTo(0.21586)
     expect(texels[10]).toBe(0)

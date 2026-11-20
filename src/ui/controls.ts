@@ -45,5 +45,5 @@ export function setupControls() {
   }
   expand(!narrow.matches)
   narrow.addEventListener('change', () => expand(!narrow.matches))
-  el('settings').onclick = () => expand(el('inspector').hidden)
+  el('settings').onclick = () => expand(Boolean(el('inspector').hidden))
 }

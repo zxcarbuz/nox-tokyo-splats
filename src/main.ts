@@ -51,6 +51,9 @@ function start() {
     event.preventDefault()
     fail('The graphics connection was lost. Retry to rebuild the city.')
   })
+  let assetsReady = true
+  THREE.DefaultLoadingManager.onStart = () => { assetsReady = false }
+  THREE.DefaultLoadingManager.onLoad = () => { assetsReady = true }
   THREE.DefaultLoadingManager.onError = () =>
     fail('A city asset could not be loaded. Retry to reload the scene.')
   const renderer = new THREE.WebGLRenderer({
@@ -164,7 +167,7 @@ function start() {
       }
       splats.update(rig.camera, bounds.x, bounds.y)
       renderer.render(scene, rig.camera)
-      if (!ready) {
+      if (!ready && assetsReady) {
         ready = true
         el('notice').hidden = true
         el('engine').textContent = 'WebGL 2'
@@ -200,6 +203,8 @@ function start() {
             ...rig.controls.target.toArray(),
           ],
           splats: splats.activeCount,
+          sourceSplats: splats.count,
+          drawCalls: renderer.info.render.calls,
           fps,
           renderer: rendererName,
           mobility: {
