@@ -865,6 +865,8 @@ export function buildCity(scene: THREE.Scene, addSplat: AddSplat) {
   return {
     update(t: number) {
       puddleMaterial.uniforms.time.value = t;
+      const scan = 1.16 + 0.055 * Math.sin(t * 2.7) + 0.025 * Math.sin(t * 5.2);
+      signs.material.color.setScalar(scan);
       projectionMaterial.opacity = 0.52 + 0.15 * Math.sin(t * 2.33);
       for (let i = 0; i < rings.length; i++) {
         const pace = 0.72 + i * 0.16;

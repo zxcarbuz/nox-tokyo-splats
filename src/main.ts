@@ -51,9 +51,10 @@ function start() {
     event.preventDefault()
     fail('The graphics connection was lost. Retry to rebuild the city.')
   })
+  let renderDirty = true
   let assetsReady = true
   THREE.DefaultLoadingManager.onStart = () => { assetsReady = false }
-  THREE.DefaultLoadingManager.onLoad = () => { assetsReady = true }
+  THREE.DefaultLoadingManager.onLoad = () => { assetsReady = true; renderDirty = true }
   THREE.DefaultLoadingManager.onError = () =>
     fail('A city asset could not be loaded. Retry to reload the scene.')
   const renderer = new THREE.WebGLRenderer({
@@ -89,6 +90,7 @@ function start() {
     )
   }
   const rig = cameraRig(canvas, () => indicateView(-1))
+  rig.controls.addEventListener('change', () => { renderDirty = true })
   viewButtons.forEach(
     (b, i) =>
       (b.onclick = () => {
@@ -108,6 +110,7 @@ function start() {
     pause: matchMedia('(prefers-reduced-motion: reduce)').matches,
   }
   function sync() {
+    renderDirty = true
     for (const key of Object.keys(state) as Toggle[])
       el(key).setAttribute('aria-pressed', String(state[key]))
     rain.enable(state.rain)
@@ -123,6 +126,7 @@ function start() {
     }
   const bounds = new THREE.Vector2()
   function resize() {
+    renderDirty = true
     const w = canvas.clientWidth,
       h = canvas.clientHeight
     renderer.setPixelRatio(
@@ -165,18 +169,21 @@ function start() {
         mobility.update(dt, state.traffic)
         rain.update(time)
       }
-      splats.update(rig.camera, bounds.x, bounds.y)
-      renderer.render(scene, rig.camera)
+      if (!state.pause || renderDirty || !ready) {
+        splats.update(rig.camera, bounds.x, bounds.y)
+        renderer.render(scene, rig.camera)
+        renderDirty = false
+        frames++
+      }
       if (!ready && assetsReady) {
         ready = true
         el('notice').hidden = true
         el('engine').textContent = 'WebGL 2'
       }
       elapsed += seconds
-      frames++
       if (elapsed >= 0.75) {
         fps = frames / elapsed
-        el('fps').textContent = fps.toFixed(0)
+        el('fps').textContent = state.pause ? '—' : fps.toFixed(fps < 10 ? 1 : 0)
         el('draws').textContent = String(renderer.info.render.calls)
         frames = 0
         elapsed = 0

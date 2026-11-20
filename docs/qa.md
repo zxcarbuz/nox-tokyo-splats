@@ -19,3 +19,5 @@ The local runner can use system Chromium at `/usr/bin/chromium`. CI uses the Pla
 - **Performance.** The 1440 × 900 test records 24 successive browser animation-frame intervals with Medium selected. It reports the render buffer size and the GPU renderer string. This short active-view sample includes browser scheduling and CPU and GPU work. [Frame intervals](qa-performance.json)
 - **Recovery and hosting.** The suite denies WebGL2 to test the initial error UI, injects a corrupt sign image to exercise the production retry flow and serves the built site under the repository path to catch broken resource URLs.
 - **Screenshots.** The suite captures four initial layouts, two camera presets, two free-camera views and narrow controls. [Original captures](../screenshots/)
+
+The standalone viewer was also opened directly from a local file in an offline Playwright Chromium 159 context. WebGL2 initialized, the orbit gesture and camera reset responded, and all three presets displayed scene pixels. The page issued zero external requests and logged zero errors. [Offline observations](qa-offline.json)

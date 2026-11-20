@@ -10,7 +10,7 @@ export function cameraRig(canvas: HTMLCanvasElement, manual: () => void) {
   const direction = new THREE.Vector3()
   let preset: number | null = 0
   const views = [
-    { offset: [0.64, 0.55, 0.76], target: [0, 4.8, 0], distance: 53 },
+    { offset: [0.64, 0.40, 0.76], target: [0, 1, 0], distance: 60 },
     { offset: [0.45, 0.13, 1], target: [0, 3, 3], distance: 27 },
     { offset: [-0.7, 1.24, 0.54], target: [0, 5, 0], distance: 47 },
   ]
@@ -22,7 +22,7 @@ export function cameraRig(canvas: HTMLCanvasElement, manual: () => void) {
       .copy(controls.target)
       .addScaledVector(
         direction.fromArray(offset).normalize(),
-        distance * Math.max(1, 1.44 / camera.aspect),
+        distance * Math.max(1, (index === 0 ? 1.30 : 1.44) / camera.aspect),
       )
     controls.update()
   }
