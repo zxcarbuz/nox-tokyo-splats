@@ -274,8 +274,9 @@ test.describe('mobile input', () => {
     await expect.poll(async () => getRadius((await snapshot(page)).camera)).toBeLessThan(getRadius(beforePinch)-1)
     expect((await snapshot(page)).camera.slice(3)).not.toEqual(beforePinch.slice(3))
     await page.setViewportSize({ width: 844, height: 390 })
+    // The media-query change expands the inspector on the next rendering update.
+    await expect(page.locator('#quality')).toBeVisible()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-    await showInspector(page)
     const rain = (await snapshot(page)).rain
     await page.locator('#rain').tap()
     await expect.poll(async () => (await snapshot(page)).rain).toBe(!rain)
