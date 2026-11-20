@@ -178,6 +178,7 @@ function start() {
     try {
       const seconds = last ? (now - last) * 0.001 : 0
       last = now
+      if (rig.update(seconds)) renderDirty = true
       const dt = state.pause ? 0 : Math.min(seconds, 0.12)
       if (dt) {
         time += dt

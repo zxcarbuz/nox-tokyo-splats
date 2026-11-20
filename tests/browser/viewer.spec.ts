@@ -258,8 +258,23 @@ test.describe('mobile input', () => {
       await session.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + 12 * i, y: y - 3 * i }] })
     }
     await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
-    await session.detach()
     await expect.poll(async () => (await snapshot(page)).camera).not.toEqual(initial)
+    // Track camera radius and orbit target separately during a two-finger gesture.
+    const getRadius = (v: number[]) => Math.hypot(v[0]-v[3], v[1]-v[4], v[2]-v[5])
+    const beforePinch = (await snapshot(page)).camera
+    const points = (spread: number, dy: number) => [
+      { x: x-spread, y: y+dy, id: 1 }, { x: x+spread, y: y+dy, id: 2 },
+    ]
+    await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: points(30, 0) })
+    for (let i = 1; i <= 4; i++) {
+      await session.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: points(30+6*i, 4*i) })
+    }
+    await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    await session.detach()
+    await expect.poll(async () => getRadius((await snapshot(page)).camera)).toBeLessThan(getRadius(beforePinch)-1)
+    expect((await snapshot(page)).camera.slice(3)).not.toEqual(beforePinch.slice(3))
+    await page.setViewportSize({ width: 844, height: 390 })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     await showInspector(page)
     const rain = (await snapshot(page)).rain
     await page.locator('#rain').tap()
