@@ -80,6 +80,22 @@ function start() {
   splats.build(scene)
   const mobility = buildMobility(scene),
     rain = createRain(scene)
+  const debugVisits = new URLSearchParams(location.search).get('debug') === 'visits'
+    ? document.createElement('section') : null
+  function refreshVisits() {
+    if (!debugVisits) return
+    const content = Object.entries(mobility.visits()).map(([shop, v]) =>
+      shop + ' · NPC ' + v.assigned.join(', ') + '\nAttempts ' + v.attempts + ' · Visits ' + v.successes +
+      '\nCompleted ' + v.completed + ' · Here ' + (v.current.join(', ') || '—')
+    ).join('\n\n')
+    if (debugVisits.textContent !== content) debugVisits.textContent = content
+  }
+  if (debugVisits) {
+    debugVisits.className = 'block visit-diagnostics'
+    debugVisits.setAttribute('aria-label', 'Shop visits')
+    el('inspector').append(debugVisits)
+    refreshVisits()
+  }
   const viewButtons =
     document.querySelectorAll<HTMLButtonElement>('[data-view]')
   function indicateView(index: number) {
@@ -182,6 +198,7 @@ function start() {
       }
       elapsed += seconds
       if (elapsed >= 0.75) {
+        refreshVisits()
         fps = frames / elapsed
         el('fps').textContent = state.pause ? '—' : fps.toFixed(fps < 10 ? 1 : 0)
         el('draws').textContent = String(renderer.info.render.calls)
@@ -210,6 +227,7 @@ function start() {
             ...rig.controls.target.toArray(),
           ],
           splats: splats.activeCount,
+          visits: mobility.visits(),
           sourceSplats: splats.count,
           drawCalls: renderer.info.render.calls,
           fps,

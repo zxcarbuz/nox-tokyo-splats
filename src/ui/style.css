@@ -511,3 +511,8 @@ footer b {
     transition: none !important;
   }
 }
+
+.visit-diagnostics {
+  white-space: pre-line;
+  font: 12px/1.6 var(--mono);
+}

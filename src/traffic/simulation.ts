@@ -1,3 +1,4 @@
+import { passes, visitRoll } from './visits'
 import { createRingRoute, SIDES, wrap } from './routes'
 import type { Side } from './routes'
 
@@ -51,7 +52,7 @@ interface Pedestrian {
   offset: number
   umbrella: boolean
   state: PedestrianState
-  visit?: { stop: number; heading: number; remaining: number; brakingDistance: number }
+  visit?: { stop: number; heading: number; remaining: number; cooldownUntil: number; approaching: boolean; roll: () => boolean; attempts: number; successes: number; completed: number }
   gate: number
   crossing: number
   crossingEvery: number
@@ -111,7 +112,7 @@ function gateDistance(pedestrian: Pedestrian, gate: number): number {
   return SIDEWALKS[pedestrian.sidewalk].gate(gate) + pedestrian.offset
 }
 
-export function createMobilitySimulation() {
+export function createMobilitySimulation(seed = Math.floor(Math.random() * 0x100000000)) {
   const cars = [
     makeCar(0, 0, 2, -4.8, 3.8),
     makeCar(1, 0, 2, 6.5, 4.15),
@@ -146,10 +147,34 @@ export function createMobilitySimulation() {
     makePedestrian(14, 0, 3, 3.4),
     makePedestrian(15, 1, 3, 5.45),
   ]
-  // Both stops are on the initial sidewalk, before the next crossing.
-  pedestrians[9].visit = { stop: SIDEWALKS[1].gate(2) - 1.28, heading: Math.PI, remaining: 5, brakingDistance: 0 }
-  // On the east straight route distance increases with z. Face west toward Aoba Mart.
-  pedestrians[4].visit = { stop: SIDEWALKS[0].gate(1) + 5.9, heading: -Math.PI / 2, remaining: 5, brakingDistance: 0.55 }
+  // Storefronts face the inner ring. Stops are spaced along the south
+  // frontage (distance decreases with x) and east frontage (increases with z).
+  const shops = {
+    Tsukimiken: [{ id: 9, stop: SIDEWALKS[0].gate(2) - 1.28 }, { id: 11, stop: SIDEWALKS[0].gate(2) - 2.2 }],
+    'Aoba Mart': [{ id: 4, stop: SIDEWALKS[0].gate(1) + 5.9 }, { id: 5, stop: SIDEWALKS[0].gate(1) + 7.1 }],
+  }
+  for (const [shop, slots] of Object.entries(shops)) {
+    for (const { id, stop } of slots) {
+      pedestrians[id].visit = {
+        stop, heading: shop === 'Tsukimiken' ? Math.PI : -Math.PI / 2,
+        remaining: 0, approaching: false, cooldownUntil: 0,
+        attempts: 0, successes: 0, completed: 0, roll: visitRoll(seed ^ Math.imul(id, 0x85ebca6b)),
+      }
+    }
+  }
+
+  function visits() {
+    return Object.fromEntries(Object.entries(shops).map(([name, slots]) => {
+      const ids = slots.map(slot => slot.id)
+      const records = ids.map(id => pedestrians[id].visit!)
+      return [name, {
+        assigned: ids, current: ids.filter(id => pedestrians[id].state === 'visiting'),
+        attempts: records.reduce((sum, r) => sum + r.attempts, 0),
+        successes: records.reduce((sum, r) => sum + r.successes, 0),
+        completed: records.reduce((sum, r) => sum + r.completed, 0),
+      }]
+    }))
+  }
 
   const carNextDistances = new Float64Array(cars.length)
   const signals = SIDES.map((_, index) => signalAt(index, 0))
@@ -212,15 +237,28 @@ export function createMobilitySimulation() {
     for (const pedestrian of pedestrians) {
       const route = SIDEWALKS[pedestrian.sidewalk]
       const visit = pedestrian.visit
-      const ahead = visit && visit.remaining > 0 && pedestrian.state === 'walking'
-        ? distanceAhead(pedestrian.distance, visit.stop, pedestrian.direction, route.length)
-        : Infinity
-      const pace = visit && visit.brakingDistance > 0 ? Math.min(1, Math.sqrt(ahead / visit.brakingDistance)) : 1
+      const brakingDistance = 0.55
+      if (visit && pedestrian.sidewalk === 0 && pedestrian.state === 'walking' && !visit.approaching
+        && time >= visit.cooldownUntil && passes(pedestrian.distance, visit.stop - pedestrian.direction * brakingDistance,
+          pedestrian.direction, pedestrian.speed * dt, route.length)) {
+        visit.attempts++
+        visit.approaching = visit.roll()
+        visit.cooldownUntil = time + 8
+      }
+      const ahead = visit?.approaching ? distanceAhead(pedestrian.distance, visit.stop, pedestrian.direction, route.length) : Infinity
+      const pace = Math.min(1, Math.sqrt(ahead / brakingDistance))
       const desiredDistance = pedestrian.speed * pace * dt
       if (visit && pedestrian.state === 'visiting') {
         visit.remaining = Math.max(0, visit.remaining - dt)
-        if (visit.remaining === 0) pedestrian.state = 'walking'
+        if (visit.remaining === 0) {
+          pedestrian.state = 'walking'
+          visit.cooldownUntil = time + 8
+          visit.completed++
+        }
       } else if (visit && ahead <= desiredDistance) {
+        visit.approaching = false
+        visit.remaining = 5
+        visit.successes++
         pedestrian.distance = visit.stop
         pedestrian.state = 'visiting'
       } else if (pedestrian.state === 'crossing') {
@@ -313,7 +351,7 @@ export function createMobilitySimulation() {
     }
   }
 
-  return { snapshot, update }
+  return { snapshot, update, visits }
 }
 
 function pedestrianPose(pedestrian: Pedestrian) {

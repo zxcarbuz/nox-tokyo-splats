@@ -27,5 +27,5 @@ export function buildMobility(scene: THREE.Scene) {
   }
 
   update(0, true)
-  return { update, snapshot: simulation.snapshot }
+  return { update, snapshot: simulation.snapshot, visits: simulation.visits }
 }
