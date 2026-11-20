@@ -51,6 +51,7 @@ interface Pedestrian {
   offset: number
   umbrella: boolean
   state: PedestrianState
+  visit?: { stop: number; heading: number; remaining: number; brakingDistance: number }
   gate: number
   crossing: number
   crossingEvery: number
@@ -145,11 +146,10 @@ export function createMobilitySimulation() {
     makePedestrian(14, 0, 3, 3.4),
     makePedestrian(15, 1, 3, 5.45),
   ]
-  // On the south straight, route distance increases toward decreasing x.
-  // Stop opposite Tsukimiken on the outer pavement, before the zebra crossing.
-  const visitor = pedestrians[9]
-  const ramenStop = SIDEWALKS[1].gate(2) - 1.28
-  let visitRemaining = 5
+  // Both stops are on the initial sidewalk, before the next crossing.
+  pedestrians[9].visit = { stop: SIDEWALKS[1].gate(2) - 1.28, heading: Math.PI, remaining: 5, brakingDistance: 0 }
+  // On the east straight route distance increases with z. Face west toward Aoba Mart.
+  pedestrians[4].visit = { stop: SIDEWALKS[0].gate(1) + 5.9, heading: -Math.PI / 2, remaining: 5, brakingDistance: 0.55 }
 
   const carNextDistances = new Float64Array(cars.length)
   const signals = SIDES.map((_, index) => signalAt(index, 0))
@@ -210,14 +210,18 @@ export function createMobilitySimulation() {
 
   function updatePedestrians(dt: number) {
     for (const pedestrian of pedestrians) {
-      const desiredDistance = pedestrian.speed * dt
       const route = SIDEWALKS[pedestrian.sidewalk]
-      if (pedestrian.state === 'visiting') {
-        visitRemaining = Math.max(0, visitRemaining - dt)
-        if (visitRemaining === 0) pedestrian.state = 'walking'
-      } else if (pedestrian === visitor && visitRemaining > 0 && pedestrian.state === 'walking'
-        && pedestrian.distance <= ramenStop && pedestrian.distance + desiredDistance >= ramenStop) {
-        pedestrian.distance = ramenStop
+      const visit = pedestrian.visit
+      const ahead = visit && visit.remaining > 0 && pedestrian.state === 'walking'
+        ? distanceAhead(pedestrian.distance, visit.stop, pedestrian.direction, route.length)
+        : Infinity
+      const pace = visit && visit.brakingDistance > 0 ? Math.min(1, Math.sqrt(ahead / visit.brakingDistance)) : 1
+      const desiredDistance = pedestrian.speed * pace * dt
+      if (visit && pedestrian.state === 'visiting') {
+        visit.remaining = Math.max(0, visit.remaining - dt)
+        if (visit.remaining === 0) pedestrian.state = 'walking'
+      } else if (visit && ahead <= desiredDistance) {
+        pedestrian.distance = visit.stop
         pedestrian.state = 'visiting'
       } else if (pedestrian.state === 'crossing') {
         pedestrian.crossing += desiredDistance
@@ -252,7 +256,7 @@ export function createMobilitySimulation() {
       pedestrian.heading += delta * Math.min(1, dt * 9)
       const moving = pedestrian.state === 'walking' || pedestrian.state === 'crossing'
       if (moving) pedestrian.phase += desiredDistance * 9
-      const targetStride = moving ? 1 : 0
+      const targetStride = moving ? pace : 0
       pedestrian.stride += (targetStride - pedestrian.stride) * Math.min(1, dt * 8)
     }
   }
@@ -316,7 +320,7 @@ function pedestrianPose(pedestrian: Pedestrian) {
   const route = SIDEWALKS[pedestrian.sidewalk]
   const position = route.sample(pedestrian.distance)
   const direction = pedestrian.direction < 0 ? Math.PI : 0
-  if (pedestrian.state === 'visiting') return { ...position, y: 0.12, heading: Math.PI }
+  if (pedestrian.state === 'visiting' && pedestrian.visit) return { ...position, y: 0.12, heading: pedestrian.visit.heading }
   if (pedestrian.state === 'walking') {
     return { ...position, y: 0.12, heading: position.heading + direction }
   }
