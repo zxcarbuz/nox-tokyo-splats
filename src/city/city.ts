@@ -1,3 +1,4 @@
+import { benches, seatTop } from '../traffic/benches';
 import * as THREE from 'three';
 import signAtlasUrl from './tokyo-signs.jpg?inline';
 
@@ -689,6 +690,19 @@ export function buildCity(scene: THREE.Scene, addSplat: AddSplat) {
     box('metal', x, 0.71, z, 0.49, 0.075, 0.47, 0x777780);
     box('metal', x, 0.49, z + 0.23, 0.29, 0.26, 0.03, 0x2e3744);
     box('light', x + 0.10, 0.49, z + 0.25, 0.038, 0.045, 0.03, lime, 0, 0.86);
+  }
+
+  for (const bench of benches) {
+    const { x, z, heading } = bench;
+    const plank = (paint: Paint, u: number, y: number, v: number, w: number, h: number, d: number, tint: number) =>
+      box(paint, x + Math.cos(heading)*u + Math.sin(heading)*v, y, z - Math.sin(heading)*u + Math.cos(heading)*v, w, h, d, tint, heading);
+    for (const v of [-.15, 0, .15]) plank('wall', 0, seatTop-.032, v, 1.05, .064, .135, 0xa46743);
+    for (const u of [-.39,.39]) {
+      plank('metal', u, .25, 0, .08,.26,.39,0x323a46);
+      plank('metal', u, .51,-.20,.05,.55,.05,0x333947);
+    }
+    plank('wall',0,.70,-.22,1.05,.15,.06,0x996345);
+    plank('light',0,.34,.16,.70,.024,.025,0xffbf70);
   }
 
   for (const [first, second, height] of [

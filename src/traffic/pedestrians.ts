@@ -1,3 +1,4 @@
+import { seatTop } from './benches'
 import * as THREE from 'three'
 import { batch, placePart, staticPose, placeMovingPart, placeSegment, standard, tint } from './instancing'
 import type { createMobilitySimulation } from './simulation'
@@ -94,9 +95,12 @@ export function buildPedestrians(group: THREE.Group, pedestrians: Pedestrians) {
     let umbrellaIndex = 0
     let backpackIndex = 0
     for (const [index, pedestrian] of states.entries()) {
-      const { phase, stride, id } = pedestrian
+      const { phase, stride, id, sit } = pedestrian
       const swing = Math.sin(phase) * stride
-      const bounce = Math.abs(Math.cos(phase)) * stride * .021
+      const scale = .89 + ((id * 3) % 7) * .028
+      // Lower the pelvis until its underside meets the top slat.
+      const drop = sit * (.557 - .088 - (seatTop - pedestrian.y) / scale)
+      const bounce = Math.abs(Math.cos(phase)) * stride * .021 - drop
       const idle = 1 - stride
       const clock = time * (.79 + (id * 7 % 13) * .027) + id * 2.39996
       const breath = Math.sin(clock * 1.72) * .008 * idle
@@ -112,7 +116,7 @@ export function buildPedestrians(group: THREE.Group, pedestrians: Pedestrians) {
       const gripZ = .203
       world.position.set(pedestrian.x, pedestrian.y, pedestrian.z)
       world.rotation.y = pedestrian.heading
-      world.scale.setScalar(.89 + ((id * 3) % 7) * .028)
+      world.scale.setScalar(scale)
       world.updateMatrix()
       const frame = world.matrix
       placeMovingPart(torso, index, frame, [sway, .754 + bounce + breath, -.012, .036, swing * -.16, swing * -.052 - weight * .035])
@@ -128,16 +132,17 @@ export function buildPedestrians(group: THREE.Group, pedestrians: Pedestrians) {
         const slot = index * 2 + limb
         const legStep = swing * side
         const footY = .05 + Math.max(0, Math.cos(phase) * side) * stride * .102
-        const footZ = legStep * .18
-        const kneeZ = footZ * .53 + .035 + Math.max(0, -legStep) * .051
-        placeSegment(thighs, slot, frame, sway * .5 + .086 * side, .557 + bounce, -.012, .092 * side, .303 + footY * .48, kneeZ)
-        placeSegment(ankles, slot, frame, .092 * side, .303 + footY * .48, kneeZ, .09 * side, footY, footZ)
+        const footZ = legStep * .18 + sit * .30
+        const kneeY = .303 + footY * .48 + sit * (.557 - .303 - .024) - drop
+        const kneeZ = sit * .13 + footZ * .53 + .035 + Math.max(0, -legStep) * .051
+        placeSegment(thighs, slot, frame, sway * .5 + .086 * side, .557 + bounce, -.012, .092 * side, kneeY, kneeZ)
+        placeSegment(ankles, slot, frame, .092 * side, kneeY, kneeZ, .09 * side, footY, footZ)
         placeMovingPart(shoes, slot, frame, [.09 * side, footY, footZ + .04, Math.min(0, legStep) * .34])
         const carriesUmbrella = pedestrian.umbrella && limb === 1
         const gesture = pulse * pulse * idle * (pedestrian.umbrella ? .70 : 1) * (side < 0 ? 1 : .64)
         const handX = carriesUmbrella ? gripX : sway + side * (.166 + gesture * .028)
-        const handY = carriesUmbrella ? gripY : .562 + bounce + breath + gesture * .077
-        const handZ = carriesUmbrella ? gripZ : -legStep * .137 + gesture * .09
+        const handY = carriesUmbrella ? gripY : .562 + bounce + breath + gesture * .077 + sit * .08
+        const handZ = carriesUmbrella ? gripZ : -legStep * .137 + gesture * .09 + sit * .16
         const elbowX = sway + side * (.178 + gesture * .035)
         const elbowY = .715 + bounce + breath
         const elbowZ = carriesUmbrella ? .06 : -.028 - legStep * .062

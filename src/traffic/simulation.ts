@@ -1,3 +1,4 @@
+import { approachSeconds, benches, sitBack, sitSeconds } from './benches'
 import { passes, visitRoll } from './visits'
 import { createRingRoute, SIDES, wrap } from './routes'
 import type { Side } from './routes'
@@ -22,7 +23,7 @@ const SIDEWALKS = [createRingRoute(8.73, 0.22), createRingRoute(13.65, 0.69)]
 const CROSSING_DISTANCE = 13.65 - 8.73
 
 export type VehiclePhase = 'green' | 'yellow' | 'red'
-export type PedestrianState = 'walking' | 'waiting' | 'crossing' | 'visiting'
+export type PedestrianState = 'walking' | 'waiting' | 'crossing' | 'visiting' | 'approaching_bench' | 'sitting_down' | 'seated' | 'standing_up' | 'leaving_bench'
 
 export interface SignalState {
   side: Side
@@ -53,6 +54,7 @@ interface Pedestrian {
   offset: number
   umbrella: boolean
   state: PedestrianState
+  rest?: { bench: typeof benches[number]; entry: number; approachLength: number; elapsed: number; cooldown: number; offset: number; sit: number; active: boolean }
   visit?: { stop: number; heading: number; remaining: number; cooldownUntil: number; approaching: boolean; roll: () => boolean; attempts: number; successes: number; completed: number }
   gate: number
   crossing: number
@@ -165,6 +167,18 @@ export function createMobilitySimulation(seed = Math.floor(Math.random() * 0x100
     }
   }
 
+  for (const bench of benches) {
+    const route = SIDEWALKS[1]
+    const gate = route.gate(bench.side)
+    const start = route.sample(gate)
+    const along = (bench.x - start.x) * Math.sin(start.heading) + (bench.z - start.z) * Math.cos(start.heading)
+    const entry = gate + along
+    const stop = route.sample(entry)
+    const approachLength = Math.hypot(bench.x - stop.x, bench.z - stop.z) - sitBack
+    pedestrians[bench.id].rest = { bench, entry, approachLength,
+      elapsed: 0, cooldown: 0, offset: 0, sit: 0, active: false }
+  }
+
   function visits() {
     return Object.fromEntries(Object.entries(shops).map(([name, slots]) => {
       const ids = slots.map(slot => slot.id)
@@ -248,9 +262,40 @@ export function createMobilitySimulation(seed = Math.floor(Math.random() * 0x100
         visit.cooldownUntil = time + 8
       }
       const ahead = visit?.approaching ? distanceAhead(pedestrian.distance, visit.stop, pedestrian.direction, route.length) : Infinity
-      const pace = Math.min(1, Math.sqrt(ahead / brakingDistance))
+      const rest = pedestrian.rest
+      const eligible = rest && !rest.active && pedestrian.state === 'walking' && pedestrian.sidewalk === 1 && time >= rest.cooldown
+      const benchAhead = eligible ? distanceAhead(pedestrian.distance, rest.entry, pedestrian.direction, route.length) : Infinity
+      const pace = Math.min(1, Math.sqrt(Math.min(ahead, benchAhead) / brakingDistance))
       const desiredDistance = pedestrian.speed * pace * dt
-      if (visit && pedestrian.state === 'visiting') {
+      if (rest && rest.active) {
+        rest.elapsed += dt
+        const duration = pedestrian.state === 'seated' ? rest.bench.duration :
+          pedestrian.state === 'approaching_bench' || pedestrian.state === 'leaving_bench' ? approachSeconds : sitSeconds
+        const t = Math.min(1, rest.elapsed/duration)
+        const ease = t*t*(3-2*t)
+        if (pedestrian.state === 'approaching_bench') rest.offset = rest.approachLength * ease
+        if (pedestrian.state === 'sitting_down') rest.sit = ease
+        if (pedestrian.state === 'standing_up') rest.sit = 1-ease
+        if (pedestrian.state === 'leaving_bench') rest.offset = rest.approachLength * (1 - ease)
+        if (t === 1) {
+          rest.elapsed = 0
+          switch (pedestrian.state) {
+            case 'approaching_bench': pedestrian.state = 'sitting_down'; break
+            case 'sitting_down': pedestrian.state = 'seated'; break
+            case 'seated': pedestrian.state = 'standing_up'; break
+            case 'standing_up': pedestrian.state = 'leaving_bench'; break
+            case 'leaving_bench':
+              pedestrian.state = 'walking'
+              rest.active = false
+              rest.cooldown = time + 24
+              break
+          }
+        }
+      } else if (eligible && benchAhead > 0 && benchAhead <= desiredDistance) {
+        pedestrian.distance = rest.entry
+        rest.active = true
+        pedestrian.state = 'approaching_bench'
+      } else if (visit && pedestrian.state === 'visiting') {
         visit.remaining = Math.max(0, visit.remaining - dt)
         if (visit.remaining === 0) {
           pedestrian.state = 'walking'
@@ -295,10 +340,13 @@ export function createMobilitySimulation(seed = Math.floor(Math.random() * 0x100
       const delta = wrap(heading - pedestrian.heading + Math.PI, Math.PI * 2) - Math.PI
       pedestrian.heading += delta * Math.min(1, dt * 9)
       const moving = pedestrian.state === 'walking' || pedestrian.state === 'crossing'
+      const approaching = pedestrian.state === 'approaching_bench' || pedestrian.state === 'leaving_bench'
+      const detourPace = approaching && rest ? Math.sin(Math.PI * rest.elapsed / approachSeconds) * .75 : 0
+      if (approaching) pedestrian.phase += detourPace * dt * 9
       if (moving) pedestrian.phase += desiredDistance * 9
       const lookout = pedestrian.state === 'waiting' ? 1 : 0
       pedestrian.lookout += (lookout - pedestrian.lookout) * -Math.expm1(-dt * 3)
-      const targetStride = moving ? pace : 0
+      const targetStride = moving ? pace : detourPace
       pedestrian.stride += (targetStride - pedestrian.stride) * Math.min(1, dt * 8)
     }
   }
@@ -343,6 +391,7 @@ export function createMobilitySimulation(seed = Math.floor(Math.random() * 0x100
           heading: pedestrian.heading,
           state: pedestrian.state,
           lookout: pedestrian.lookout,
+          sit: pedestrian.rest?.sit ?? 0,
           stride: pedestrian.stride,
           phase: pedestrian.phase,
           umbrella: pedestrian.umbrella,
@@ -363,6 +412,14 @@ function pedestrianPose(pedestrian: Pedestrian) {
   const route = SIDEWALKS[pedestrian.sidewalk]
   const position = route.sample(pedestrian.distance)
   const direction = pedestrian.direction < 0 ? Math.PI : 0
+  const rest = pedestrian.rest
+  if (rest?.active) {
+    const heading = rest.bench.heading
+    const offset = rest.offset + sitBack * rest.sit
+    const turning = pedestrian.state === 'approaching_bench' && rest.elapsed < .85
+    return { x: position.x - Math.sin(heading)*offset, z: position.z - Math.cos(heading)*offset,
+      y: .12, heading: turning ? heading + Math.PI : heading }
+  }
   if (pedestrian.state === 'visiting' && pedestrian.visit) return { ...position, y: 0.12, heading: pedestrian.visit.heading }
   if (pedestrian.state === 'walking') {
     return { ...position, y: 0.12, heading: position.heading + direction }
