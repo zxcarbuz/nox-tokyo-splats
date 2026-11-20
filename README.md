@@ -57,8 +57,8 @@ npm run test:offline
 
 ## GitHub и публикация
 
-Целевой адрес Git remote — `https://github.com/zxcarbuz/nox-tokyo-splats.git`, ветка — `main`. Приватный репозиторий создан владельцем. Загрузка восстановленного проекта подтверждена через GitHub API. Статус автоматических проверок доступен во вкладке Actions. В облачной сессии API GitHub Pages вернул HTTP 403 для чтения и включения Pages. Для локального просмотра доступен автономный HTML.
+[Открыть NOX Tokyo в браузере](https://zxcarbuz.github.io/nox-tokyo-splats/)
 
-Workflow **Verify** запускается на push и pull request и сохраняет диагностику Playwright при сбое. Для публикации из целевого репозитория с уже доступным Pages следует выбрать GitHub Actions в настройках Pages и запустить **Publish to Pages** из ветки main. Этот workflow выполняет проверки, собирает сайт и передаёт только каталог dist. Относительная база Vite поддерживает путь проекта. Workflow не меняет видимость репозитория или тариф.
+Workflow **Verify** проверяет push и pull request. Для обновления сайта запустите **Publish to Pages** для ветки `main` во вкладке Actions. Workflow проверяет типы, линтер и unit-тесты, собирает Vite с базой `/nox-tokyo-splats/` и публикует каталог `dist/` через GitHub Actions. Для просмотра без сети доступна [автономная сборка v1.0.0](https://github.com/zxcarbuz/nox-tokyo-splats/releases/tag/v1.0.0).
 
 Код проекта поставляется без автоматически выбранной лицензии. Уведомление MIT о Three.js включено в статическую сборку и в автономный HTML.
