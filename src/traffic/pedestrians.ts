@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { batch, placeMovingPart, placeSegment, standard, tint } from './instancing'
+import { batch, placePart, staticPose, placeMovingPart, placeSegment, standard, tint } from './instancing'
 import type { createMobilitySimulation } from './simulation'
 
 type Pedestrians = ReturnType<ReturnType<typeof createMobilitySimulation>['snapshot']>['pedestrians']
@@ -56,7 +56,7 @@ export function buildPedestrians(group: THREE.Group, pedestrians: Pedestrians) {
   const hips = batch(group, new THREE.CapsuleGeometry(.112, .018, 3, 7).scale(1.25, .73, .8), standard('#ffffff', .92), count)
   const head = batch(group, new THREE.SphereGeometry(.118, 9, 7).scale(.88, 1.12, .97), skin, count)
   const hair = batch(group, new THREE.SphereGeometry(.108, 8, 6, 0, Math.PI * 2, 0, Math.PI * .69).scale(1.04, 1.08, 1.11), standard('#292832', .96), count)
-  const sleeves = batch(group, segment(.046, .039), coat, count * 2)
+  const sleeves = batch(group, segment(.046, .039), coat, count * 4)
   const hands = batch(group, new THREE.SphereGeometry(.039, 7, 5), skin, count * 2)
   const thighs = batch(group, segment(.058, .047), standard('#ffffff', .91), count * 2)
   const ankles = batch(group, segment(.04, .048), standard('#ffffff', .9), count * 2)
@@ -67,6 +67,9 @@ export function buildPedestrians(group: THREE.Group, pedestrians: Pedestrians) {
   const umbrellaStems = batch(group, segment(.01), standard('#6a6670', .34, .72), umbrellaCount)
   const backpacks = batch(group, new THREE.CapsuleGeometry(.108, .102, 3, 7).scale(1.06, 1, .63), standard('#323845', .95), 4)
   const parts = [torso, hips, head, hair, sleeves, hands, thighs, ankles, shoes, umbrellas, umbrellaStems, backpacks]
+  const neck = new THREE.Object3D()
+  const headFrame = new THREE.Matrix4()
+  const hairOffset = staticPose([0, .032, -.012])
   const world = new THREE.Object3D()
   let umbrellaIndex = 0
   for (const [index, pedestrian] of pedestrians.entries()) {
@@ -78,7 +81,8 @@ export function buildPedestrians(group: THREE.Group, pedestrians: Pedestrians) {
     tint(head, index, face)
     for (let limb = 0; limb < 2; limb++) {
       const slot = index * 2 + limb
-      tint(sleeves, slot, jacket)
+      tint(sleeves, slot * 2, jacket)
+      tint(sleeves, slot * 2 + 1, jacket)
       tint(hands, slot, face)
       tint(thighs, slot, pants)
       tint(ankles, slot, pants)
@@ -93,16 +97,32 @@ export function buildPedestrians(group: THREE.Group, pedestrians: Pedestrians) {
       const { phase, stride, id } = pedestrian
       const swing = Math.sin(phase) * stride
       const bounce = Math.abs(Math.cos(phase)) * stride * .021
-      const sway = Math.sin(phase) * stride * .015
+      const idle = 1 - stride
+      const clock = time * (.79 + (id * 7 % 13) * .027) + id * 2.39996
+      const breath = Math.sin(clock * 1.72) * .008 * idle
+      const weight = Math.sin(clock * .73) * idle
+      const sway = swing * .015 + weight * .022
+      // Smooth pulses leave a quiet interval between glances and gestures.
+      const pulse = Math.max(0, Math.cos(clock * .91))
+      const glance = pulse * pulse * Math.sin(clock * .49)
+      const scan = Math.sin(clock * 1.55) * pedestrian.lookout
+      const yaw = idle * (.20 * glance + .12 * scan) + .04 * swing
+      const gripX = .221 + sway
+      const gripY = .873 + bounce + breath
+      const gripZ = .203
       world.position.set(pedestrian.x, pedestrian.y, pedestrian.z)
       world.rotation.y = pedestrian.heading
       world.scale.setScalar(.89 + ((id * 3) % 7) * .028)
       world.updateMatrix()
       const frame = world.matrix
-      placeMovingPart(torso, index, frame, [sway, .754 + bounce, -.012, .036, swing * -.16, swing * -.052])
+      placeMovingPart(torso, index, frame, [sway, .754 + bounce + breath, -.012, .036, swing * -.16, swing * -.052 - weight * .035])
       placeMovingPart(hips, index, frame, [sway * .7, .557 + bounce, -.012, 0, swing * .12])
-      placeMovingPart(head, index, frame, [sway, 1.085 + bounce, .024])
-      placeMovingPart(hair, index, frame, [sway, 1.117 + bounce, .012])
+      neck.position.set(sway + weight * .009, 1.085 + bounce + breath, .024)
+      neck.rotation.set(.026 * glance * idle, yaw, -weight * .025)
+      neck.updateMatrix()
+      headFrame.multiplyMatrices(frame, neck.matrix)
+      head.setMatrixAt(index, headFrame)
+      placePart(hair, index, headFrame, hairOffset)
       for (let limb = 0; limb < 2; limb++) {
         const side = limb === 0 ? -1 : 1
         const slot = index * 2 + limb
@@ -114,19 +134,24 @@ export function buildPedestrians(group: THREE.Group, pedestrians: Pedestrians) {
         placeSegment(ankles, slot, frame, .092 * side, .303 + footY * .48, kneeZ, .09 * side, footY, footZ)
         placeMovingPart(shoes, slot, frame, [.09 * side, footY, footZ + .04, Math.min(0, legStep) * .34])
         const carriesUmbrella = pedestrian.umbrella && limb === 1
-        const handX = side * (carriesUmbrella ? .221 : .166)
-        const handY = (carriesUmbrella ? .873 : .562) + bounce
-        const handZ = carriesUmbrella ? .203 : -legStep * .137
-        placeSegment(sleeves, slot, frame, sway + side * .157, .88 + bounce, -.001, handX, handY, handZ)
+        const gesture = pulse * pulse * idle * (pedestrian.umbrella ? .70 : 1) * (side < 0 ? 1 : .64)
+        const handX = carriesUmbrella ? gripX : sway + side * (.166 + gesture * .028)
+        const handY = carriesUmbrella ? gripY : .562 + bounce + breath + gesture * .077
+        const handZ = carriesUmbrella ? gripZ : -legStep * .137 + gesture * .09
+        const elbowX = sway + side * (.178 + gesture * .035)
+        const elbowY = .715 + bounce + breath
+        const elbowZ = carriesUmbrella ? .06 : -.028 - legStep * .062
+        placeSegment(sleeves, slot * 2, frame, sway + side * .157, .88 + bounce + breath, -.001, elbowX, elbowY, elbowZ)
+        placeSegment(sleeves, slot * 2 + 1, frame, elbowX, elbowY, elbowZ, handX, handY, handZ)
         placeMovingPart(hands, slot, frame, [handX, handY, handZ])
       }
       if (pedestrian.umbrella) {
-        const tilt = Math.sin(time * 1.35 + id) * .049 + sway * 2
-        placeMovingPart(umbrellas, umbrellaIndex, frame, [.146 + sway, 1.295 + bounce, .136, .08, id * .9, tilt])
-        placeSegment(umbrellaStems, umbrellaIndex++, frame, .221, .86 + bounce, .203, .146 + sway, 1.473 + bounce, .136)
+        const tilt = Math.sin(clock) * .035
+        placeMovingPart(umbrellas, umbrellaIndex, frame, [.146 + sway, 1.295 + bounce + breath, .136, .08, id * .9, tilt])
+        placeSegment(umbrellaStems, umbrellaIndex++, frame, gripX, gripY, gripZ, .146 + sway, 1.473 + bounce + breath, .136)
       }
       if (id % 4 === 0) {
-        placeMovingPart(backpacks, backpackIndex++, frame, [sway, .754 + bounce, -.126, .05, swing * -.09])
+        placeMovingPart(backpacks, backpackIndex++, frame, [sway, .754 + bounce + breath, -.126, .05, swing * -.09])
       }
     }
     for (const part of parts) part.instanceMatrix.needsUpdate = true

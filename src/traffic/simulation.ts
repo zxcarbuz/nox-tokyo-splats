@@ -47,6 +47,7 @@ interface Pedestrian {
   distance: number
   speed: number
   heading: number
+  lookout: number
   stride: number
   phase: number
   offset: number
@@ -92,6 +93,7 @@ function makePedestrian(id: number, sidewalk: number, side: number, ahead: numbe
     distance,
     speed: 0.91 + (id % 6) * 0.105,
     heading: route.sample(distance).heading + (direction < 0 ? Math.PI : 0),
+    lookout: 0,
     stride: 0,
     phase: id * 1.87,
     offset: ((id * 5) % 9 - 4) * 0.13,
@@ -294,6 +296,8 @@ export function createMobilitySimulation(seed = Math.floor(Math.random() * 0x100
       pedestrian.heading += delta * Math.min(1, dt * 9)
       const moving = pedestrian.state === 'walking' || pedestrian.state === 'crossing'
       if (moving) pedestrian.phase += desiredDistance * 9
+      const lookout = pedestrian.state === 'waiting' ? 1 : 0
+      pedestrian.lookout += (lookout - pedestrian.lookout) * -Math.expm1(-dt * 3)
       const targetStride = moving ? pace : 0
       pedestrian.stride += (targetStride - pedestrian.stride) * Math.min(1, dt * 8)
     }
@@ -338,6 +342,7 @@ export function createMobilitySimulation(seed = Math.floor(Math.random() * 0x100
           z,
           heading: pedestrian.heading,
           state: pedestrian.state,
+          lookout: pedestrian.lookout,
           stride: pedestrian.stride,
           phase: pedestrian.phase,
           umbrella: pedestrian.umbrella,
