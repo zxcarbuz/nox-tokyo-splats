@@ -97,6 +97,7 @@ async function drag(page: Page, dx: number, dy: number, button: 'left' | 'right'
 
 test('WebGL2 content, quality, rain, lighting and keyboard activation', async ({ page }) => {
   const errors = await openScene(page)
+  await page.locator('#pause').click()
   const context = await page.locator('#scene').evaluate(el => (el as HTMLCanvasElement).getContext('webgl2') !== null)
   expect(context).toBe(true)
   expect(await colorfulPixels(page)).toBeGreaterThan(60)
@@ -109,7 +110,6 @@ test('WebGL2 content, quality, rain, lighting and keyboard activation', async ({
   await expect.poll(async () => (await snapshot(page)).splats).toBeGreaterThan(low)
   await page.locator('#quality').selectOption('medium')
   await expect.poll(async () => (await snapshot(page)).quality).toBe('medium')
-  await page.locator('#pause').click()
   for (const key of ['rain', 'light'] as const) {
     const original = (await snapshot(page))[key]
     const pixelsBefore = await canvasSample(page)
@@ -151,6 +151,7 @@ test('mobility positions advance, pause and resume independently of traffic', as
 })
 
 test('rotate, pan, zoom and reset the camera', async ({ page }) => {
+  if (!capture) await page.emulateMedia({ reducedMotion: 'reduce' })
   const errors = await openScene(page)
   const initial = (await snapshot(page)).camera
   await drag(page, 150, -25)
@@ -178,6 +179,7 @@ test('rotate, pan, zoom and reset the camera', async ({ page }) => {
 
 for (const [width, height] of [[1920, 1080], [1440, 900], [390, 844], [375, 812]]) {
   test('composition and resize ' + width + 'x' + height, async ({ page }) => {
+    if (!capture) await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.setViewportSize({ width, height })
     const errors = await openScene(page)
     await frame(page, width + 'x' + height)

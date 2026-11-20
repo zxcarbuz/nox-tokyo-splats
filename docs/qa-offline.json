@@ -1,5 +1,5 @@
 {
-  "url": "file:///…/NOX-Tokyo.html",
+  "protocol": "file:",
   "bytes": 1074285,
   "chromium": "159.0.8154.6",
   "webgl2": true,
