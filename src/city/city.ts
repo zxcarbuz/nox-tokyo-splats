@@ -26,8 +26,8 @@ const blue = 0x588eff;
 const red = 0xff4359;
 const lime = 0xb6f270;
 const facades: Face[] = [0, 1, 2, 3];
-const signStyles = ['v', 'h', 'v', 'v', 'h', 'h', 'v', 's', 'h', 'h', 'v', 's', 'h', 'h', 'v', 'h', 'h', 'v', 'h', 'h'];
-const signColors = [pink, cyan, cyan, red, pink, lime, amber, cyan, cyan, amber, blue, pink, cyan, red, violet, blue, amber, pink, violet, cyan];
+const signStyles = ['v', 'h', 'v', 'v', 'h', 'h', 'v', 's', 'h', 'h', 'v', 's', 'h', 'h', 'v', 'h', 'h', 'v', 'h', 'h', 'h', 'h', 'v', 'h'];
+const signColors = [pink, cyan, cyan, red, pink, lime, amber, cyan, cyan, amber, blue, pink, cyan, red, violet, blue, amber, pink, violet, cyan, amber, lime, lime, red];
 
 const blocks: Building[] = [
   { x: -4.64, z: -5.02, w: 4.60, d: 4.24, h: 13.52, color: 0x24293c, trim: 0x3f475e, accent: cyan, floors: 10, style: 'tower' },
@@ -371,10 +371,10 @@ export function buildCity(scene: THREE.Scene, addSplat: AddSplat) {
     [11, 0, 3, 1.15, 2.00, 0.43, 1.56, 0.54],
     [12, 0, 9, 0.0, 2.33, 2.34, 0.66, 0.27],
     [12, 0, 16, -0.31, 1.16, 0.57, 0.19, 0.27],
-    [13, 0, 8, 0.0, 2.39, 3.77, 0.73, 0.29],
-    [13, 1, 19, 0.09, 1.51, 1.24, 0.38, 0.28],
-    [14, 0, 18, 0.0, 2.48, 3.44, 0.77, 0.29],
-    [14, 1, 0, -0.48, 2.18, 0.58, 2.13, 0.48],
+    [13, 0, 20, 0.0, 2.39, 3.77, 0.73, 0.29],
+    [13, 1, 23, 0.09, 1.51, 1.24, 0.38, 0.28],
+    [14, 0, 21, 0.0, 2.48, 3.44, 0.77, 0.29],
+    [14, 1, 22, -0.48, 2.18, 0.58, 2.13, 0.48],
     [14, 1, 16, 0.54, 1.23, 0.57, 0.20, 0.27],
   ];
 
@@ -392,6 +392,51 @@ export function buildCity(scene: THREE.Scene, addSplat: AddSplat) {
   for (const [index, face, id, u, y, w, h, out] of posters) {
     sign(blocks[index], face, id, u, y, w, h, out);
   }
+
+  // Tsukimiken: timber counter, ceramic bowls and a split indigo noren.
+  const ramen = blocks[13];
+  panel('wall', ramen, 0, 0, 1.0, 3.74, 1.58, 0.07, 0x703c2c, 0.25);
+  panel('light', ramen, 0, -0.46, 1.14, 2.38, 0.72, 0.03, 0xffbb66, 0.30, 0.68);
+  panel('wall', ramen, 0, -0.46, 0.76, 2.52, 0.11, 0.36, 0xbd8351, 0.40);
+  for (let i = 0; i < 4; i++) {
+    const u = -1.36 + i * 0.59;
+    panel('wall', ramen, 0, u, 0.87, 0.18, 0.12, 0.17, 0xc5d7d9, 0.45);
+    panel('wall', ramen, 0, u, 0.94, 0.25, 0.045, 0.21, 0xffe5b9, 0.45);
+    panel('metal', ramen, 0, u + 0.19, 0.94, 0.05, 0.29, 0.07, 0xbc4936, 0.37);
+  }
+  for (let i = 0; i < 6; i++) {
+    const u = -1.39 + i * 0.45;
+    panel('wall', ramen, 0, u, 1.57, 0.42, 0.43, 0.036, 0x233b5a, 0.48);
+    panel('wall', ramen, 0, u, 1.40, 0.40, 0.025, 0.014, 0xdcc098, 0.51);
+  }
+  for (const u of [-1.71, 1.02]) {
+    panel('light', ramen, 0, u, 1.50, 0.23, 0.42, 0.21, 0xff633a, 0.46);
+    for (const y of [1.27, 1.73]) panel('metal', ramen, 0, u, y, 0.18, 0.05, 0.18, 0x30262a, 0.46);
+  }
+
+  // Aoba Mart: illuminated refrigerator cases and a wraparound striped fascia.
+  const mart = blocks[14];
+  for (const face of [0, 1] as const) {
+    const width = face === 0 ? mart.w : mart.d;
+    for (const [y, tint] of [[1.92, 0x00897a], [2.00, 0xecffcf], [2.08, 0x83c850]]) {
+      panel('light', mart, face, 0, y, width, 0.075, 0.09, tint, 0.63);
+    }
+  }
+  for (const u of [-1.28, -0.40]) {
+    panel('metal', mart, 0, u, 1.02, 0.87, 1.44, 0.08, 0x236263, 0.27);
+    panel('light', mart, 0, u, 1.03, 0.76, 1.28, 0.03, 0xc8fff1, 0.33, 0.8);
+    for (let row = 0; row < 3; row++) {
+      const y = 0.53 + row * 0.35;
+      panel('metal', mart, 0, u, y, 0.75, 0.05, 0.09, 0xf2e6c7, 0.37);
+      for (let col = 0; col < 4; col++) {
+        const product = u - 0.26 + col * 0.17;
+        const tint = [0xf89e52, 0xc64964, 0x81ad4b, 0x588bae][(col + row) % 4];
+        panel('wall', mart, 0, product, y + 0.13, 0.12, 0.19, 0.05, tint, 0.38);
+      }
+    }
+  }
+  panel('metal', mart, 0, 1.25, 0.48, 0.53, 0.71, 0.24, 0x207763, 0.40);
+  for (const y of [0.24, 0.45, 0.67]) panel('light', mart, 0, 1.25, y, 0.46, 0.045, 0.04, 0xa5d887, 0.54, 0.55);
 
   // Communications crown and the narrow emergency rails on the landmark tower.
   const tower = blocks[0];
@@ -595,8 +640,8 @@ export function buildCity(scene: THREE.Scene, addSplat: AddSplat) {
 
   vending(-5.12, 8.31, 0, 0x992e43, pink);
   vending(-2.45, 8.30, 0, 0x476084, cyan);
-  vending(3.20, 8.23, 0, 0x2e596b, cyan);
-  vending(7.79, 5.11, Math.PI / 2, 0x593967, violet);
+  vending(2.91, 8.26, 0, 0x984335, amber);
+  vending(7.55, 8.22, 0, 0x307c72, lime);
   vending(8.24, -6.00, Math.PI / 2, 0x325c67, cyan);
   vending(8.12, -5.19, Math.PI / 2, 0x693c57, pink);
   vending(-8.27, -0.20, -Math.PI / 2, 0x4d466a, violet);

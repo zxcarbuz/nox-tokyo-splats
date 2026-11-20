@@ -97,6 +97,10 @@ for i,mode,title,sub,neon,bg in [
     (17,'v','東京','TOKYO',P,'#310d2a'),
     (18,'h','深夜営業','MIDNIGHT ARCADE',V,'#1a102d'),
     (19,'h','入口','STATION ENTRANCE',C,'#0a2426'),
+    (20,'h','月見軒','TSUKIMIKEN  /  RAMEN',T,'#3b160e'),
+    (21,'h','あおばマート','AOBA MART  /  24H',L,'#0c302c'),
+    (22,'v','コンビニ','24H',L,'#12332b'),
+    (23,'h','食券','MEAL TICKETS',R,'#311612'),
 ]: sign(i,mode,title,sub,neon,bg)
 args.output.parent.mkdir(parents=True, exist_ok=True)
 atlas.save(args.output, quality=92, optimize=True, subsampling=0)
