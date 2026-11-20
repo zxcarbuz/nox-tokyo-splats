@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#101213">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3E%3Crect width='30' height='30' rx='4' fill='%23c1fc60'/%3E%3Cpath d='m5 22 5-14h4l3 8 3-8h5l-5 14h-4l-3-8-3 8z'/%3E%3C/svg%3E"><title>NOX Tokyo · Scene Lab</title>
+</head><body>
+<header class="mast"><div class="brand"><svg aria-hidden="true" viewBox="0 0 38 32"><path fill="currentColor" d="M1 27 9 5h7l5 12 5-12h10l-9 22h-7l-5-12-4 12z"/></svg>NOX<span class="brandline"></span><span class="lab">SCENE LAB</span></div><span class="engine"><i></i><span id="engine">Initializing</span></span></header>
+<main><section class="intro"><div><div class="kicker"><b></b> GAUSSIAN SPLATTING EXPERIMENT</div><h1>Tokyo After Dark<span>.</span></h1><p>A rain-soaked city block, suspended in the void.</p></div><span class="loc">東京 <span>/</span> TOKYO, JP</span></section>
+<div class="workspace">
+<section class="stage" aria-label="Interactive city viewport">
+<div class="viewport"><canvas id="scene" tabindex="0" aria-label="Tokyo in 3D. Drag to orbit, scroll to zoom, right-drag to pan. Arrow keys rotate, Shift and arrows pan, plus and minus zoom."></canvas>
+<div class="overlay"><span class="live"><i></i><span id="live">LOADING</span></span><span class="camlabel" id="camlabel">CAM 01</span></div>
+<span class="corner tl"></span><span class="corner br"></span>
+<div id="notice" role="status">Building Tokyo…</div></div>
+<div class="views"><span class="tiny">CAMERA</span><div class="presets" aria-label="Camera views"><button class="preset" data-view="0" aria-pressed="true">Isometric</button><button class="preset" data-view="1" aria-pressed="false">Street level</button><button class="preset" data-view="2" aria-pressed="false">Rooftops</button></div><button id="reset" class="iconbtn" aria-label="Reset camera" title="Reset camera"></button></div></section>
+<aside><div class="paneltitle"><span class="smallIcon" data-icon="sliders"></span><h2>Scene controls</h2><button id="settings" aria-expanded="true" aria-controls="inspector" aria-label="Toggle scene controls">−</button></div>
+<div id="inspector"><section class="block"><h3>Simulation</h3><div id="toggles"></div></section>
+<section class="block quality"><h3><label for="quality">Render quality</label></h3><div class="selectwrap"><select id="quality"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select></div></section>
+<section class="block tele"><h3>Telemetry</h3><div class="metric"><span>Frame rate</span><strong><span id="fps">—</span> <small>FPS</small></strong></div><div class="metric"><span>Gaussian splats</span><strong id="splats">—</strong></div><div class="metric"><span>Draw calls</span><strong id="draws">—</strong></div></section></div></aside>
+</div><footer><span class="footicon" data-icon="orbit"></span><span class="pointerhint">Drag to orbit <b>·</b> Scroll to zoom <b>·</b> Right-drag to pan</span><span class="touchhint">Drag to orbit <b>·</b> Pinch to zoom <b>·</b> Two fingers to pan</span></footer>
+</main><script type="module" src="/src/main.ts"></script></body></html>
