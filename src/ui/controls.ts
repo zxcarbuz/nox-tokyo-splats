@@ -15,7 +15,7 @@ export type Toggle = 'rain'|'traffic'|'light'|'pause'
 export function setupControls(){
  document.querySelectorAll<HTMLElement>('[data-icon]').forEach(node=>node.innerHTML=icon(node.dataset.icon as Icon))
  el('reset').innerHTML=icon('reset')
- const entries: [Toggle,string][]=[['rain','Rainfall'],['traffic','Traffic'],['light','Neon lighting'],['pause','Pause simulation']]
+ const entries: [Toggle,string][]=[['rain','Rainfall'],['traffic','Traffic'],['light','City lighting'],['pause','Pause simulation']]
  entries.forEach(([id,label])=>{
   const button=document.createElement('button')
   button.id=id; button.className='toggle'; button.innerHTML=icon(id)+label+'<span aria-hidden="true" class="switch"></span>'
