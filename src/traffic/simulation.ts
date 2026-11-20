@@ -21,7 +21,7 @@ const SIDEWALKS = [createRingRoute(8.73, 0.22), createRingRoute(13.65, 0.69)]
 const CROSSING_DISTANCE = 13.65 - 8.73
 
 export type VehiclePhase = 'green' | 'yellow' | 'red'
-export type PedestrianState = 'walking' | 'waiting' | 'crossing'
+export type PedestrianState = 'walking' | 'waiting' | 'crossing' | 'visiting'
 
 export interface SignalState {
   side: Side
@@ -145,6 +145,12 @@ export function createMobilitySimulation() {
     makePedestrian(14, 0, 3, 3.4),
     makePedestrian(15, 1, 3, 5.45),
   ]
+  // On the south straight, route distance increases toward decreasing x.
+  // Stop opposite Tsukimiken on the outer pavement, before the zebra crossing.
+  const visitor = pedestrians[9]
+  const ramenStop = SIDEWALKS[1].gate(2) - 1.28
+  let visitRemaining = 5
+
   const carNextDistances = new Float64Array(cars.length)
   const signals = SIDES.map((_, index) => signalAt(index, 0))
   const crossingActive = new Uint8Array(SIDES.length)
@@ -206,7 +212,14 @@ export function createMobilitySimulation() {
     for (const pedestrian of pedestrians) {
       const desiredDistance = pedestrian.speed * dt
       const route = SIDEWALKS[pedestrian.sidewalk]
-      if (pedestrian.state === 'crossing') {
+      if (pedestrian.state === 'visiting') {
+        visitRemaining = Math.max(0, visitRemaining - dt)
+        if (visitRemaining === 0) pedestrian.state = 'walking'
+      } else if (pedestrian === visitor && visitRemaining > 0 && pedestrian.state === 'walking'
+        && pedestrian.distance <= ramenStop && pedestrian.distance + desiredDistance >= ramenStop) {
+        pedestrian.distance = ramenStop
+        pedestrian.state = 'visiting'
+      } else if (pedestrian.state === 'crossing') {
         pedestrian.crossing += desiredDistance
         if (pedestrian.crossing >= CROSSING_DISTANCE) {
           pedestrian.sidewalk = 1 - pedestrian.sidewalk
@@ -237,8 +250,9 @@ export function createMobilitySimulation() {
       const { heading } = pedestrianPose(pedestrian)
       const delta = wrap(heading - pedestrian.heading + Math.PI, Math.PI * 2) - Math.PI
       pedestrian.heading += delta * Math.min(1, dt * 9)
-      if (pedestrian.state !== 'waiting') pedestrian.phase += desiredDistance * 9
-      const targetStride = pedestrian.state === 'waiting' ? 0 : 1
+      const moving = pedestrian.state === 'walking' || pedestrian.state === 'crossing'
+      if (moving) pedestrian.phase += desiredDistance * 9
+      const targetStride = moving ? 1 : 0
       pedestrian.stride += (targetStride - pedestrian.stride) * Math.min(1, dt * 8)
     }
   }
@@ -302,6 +316,7 @@ function pedestrianPose(pedestrian: Pedestrian) {
   const route = SIDEWALKS[pedestrian.sidewalk]
   const position = route.sample(pedestrian.distance)
   const direction = pedestrian.direction < 0 ? Math.PI : 0
+  if (pedestrian.state === 'visiting') return { ...position, y: 0.12, heading: Math.PI }
   if (pedestrian.state === 'walking') {
     return { ...position, y: 0.12, heading: position.heading + direction }
   }
