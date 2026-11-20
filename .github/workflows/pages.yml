@@ -22,7 +22,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run typecheck && npm run lint && npm test && npm run build
+      - run: npm run typecheck && npm run lint && npm test && npm run build -- --base /nox-tokyo-splats/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
