@@ -1,9 +1,0 @@
-# Gaussian splat renderer
-
-Each splat has a world-space center, three axis-aligned standard deviations, an sRGB color, and opacity. The camera changes the screen-space orientation and aspect ratio of the projected ellipse. Colors are decoded to linear sRGB when added and converted to the renderer's output color space in the fragment shader.
-
-The vertex shader evaluates the perspective Jacobian at the splat center and transforms the 3D covariance into a 2D screen-space covariance, `J R diag(sx², sy², sz²) Rᵀ Jᵀ`, where `R` is the camera's world-to-view rotation. The covariance eigenvectors and eigenvalues orient and size an instanced quad. Fragments within three standard deviations use Gaussian opacity. Adding 0.22 px² of filter variance softens subpixel footprints, with a determinant-based opacity adjustment that preserves the integrated opacity of the Gaussian. The shader rejects centers outside the camera's depth range and ellipses that fall fully outside the viewport.
-
-The cloud uses one transparent instanced draw. The rasterizer depth-tests against opaque scene geometry using each splat's center depth. The splats leave the depth buffer unchanged and blend in back-to-front order by camera-space center depth, an approximation when splats intersect. The default canvas uses source-over blending in the configured display color space. A stable radix sort updates the order when the camera's depth axis changes. The static float texture holds all splat data, so sorting only uploads the sampled point indices.
-
-High quality submits every splat. Medium and low quality use nested, deterministic samples of approximately 64% and 34% of the cloud, with capped opacity compensation for lower point density. `count` reports the source count and `activeCount` reports the sample size before viewport clipping. Call `update` with the drawing-buffer dimensions in physical pixels before rendering the scene.
