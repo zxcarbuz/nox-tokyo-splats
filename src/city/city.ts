@@ -320,8 +320,14 @@ export function buildCity(scene: THREE.Scene, addSplat: AddSplat) {
     }
   }
 
+  const rainCovers: THREE.Vector4[] = [];
   function awning(b: Building, face: Face, u: number, width: number, hex: number, striped: boolean) {
     const reach = 0.52;
+    if ((b === blocks[6] && face === 1) || (b === blocks[11] && face === 0)) {
+      const [ax, , az] = facePoint(b, face, -width / 2, 1.97, 0.04);
+      const [bx, , bz] = facePoint(b, face, width / 2, 1.97, reach + 0.10);
+      rainCovers.push(new THREE.Vector4(Math.min(ax, bx), Math.min(az, bz), Math.max(ax, bx), Math.max(az, bz)));
+    }
     panel('metal', b, face, u, 1.97, width, 0.055, reach, 0x4a4148, reach / 2 + 0.04);
     for (let i = 0; i < 8; i++) {
       const strip = width / 8;
@@ -922,6 +928,7 @@ export function buildCity(scene: THREE.Scene, addSplat: AddSplat) {
   city.add(puddles);
 
   return {
+    rainCovers,
     update(t: number) {
       puddleMaterial.uniforms.time.value = t;
       const scan = 1.16 + 0.055 * Math.sin(t * 2.7) + 0.025 * Math.sin(t * 5.2);

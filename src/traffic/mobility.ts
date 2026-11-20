@@ -17,9 +17,9 @@ export function buildMobility(scene: THREE.Scene) {
   let lastTraffic: boolean | undefined
 
   function update(dt: number, traffic: boolean) {
-    if (dt === 0 && lastTraffic === traffic) return
+    const advanced = simulation.update(dt, traffic)
+    if (!advanced && lastTraffic === traffic) return
     lastTraffic = traffic
-    simulation.update(dt, traffic)
     const state = simulation.snapshot()
     moveVehicles(state.cars)
     movePedestrians(state.pedestrians, state.time)
@@ -27,5 +27,6 @@ export function buildMobility(scene: THREE.Scene) {
   }
 
   update(0, true)
-  return { update, snapshot: simulation.snapshot, visits: simulation.visits }
+  return { update, snapshot: simulation.snapshot, visits: simulation.visits, setRain: simulation.setRain,
+    weather: () => ({ raining: simulation.raining, shelters: simulation.shelterStatus() }) }
 }

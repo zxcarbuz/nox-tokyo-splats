@@ -79,7 +79,7 @@ function start() {
   const city = buildCity(scene, splats.add.bind(splats))
   splats.build(scene)
   const mobility = buildMobility(scene),
-    rain = createRain(scene)
+    rain = createRain(scene, city.rainCovers)
   const debugVisits = new URLSearchParams(location.search).get('debug') === 'visits'
     ? document.createElement('section') : null
   function refreshVisits() {
@@ -129,6 +129,7 @@ function start() {
     renderDirty = true
     for (const key of Object.keys(state) as Toggle[])
       el(key).setAttribute('aria-pressed', String(state[key]))
+    mobility.setRain(state.rain)
     rain.enable(state.rain)
     rim.intensity = state.light ? 1.7 : 0
     moon.intensity = state.light ? 2.1 : 0.65
@@ -229,6 +230,7 @@ function start() {
           ],
           splats: splats.activeCount,
           visits: mobility.visits(),
+          weather: mobility.weather(),
           sourceSplats: splats.count,
           drawCalls: renderer.info.render.calls,
           fps,

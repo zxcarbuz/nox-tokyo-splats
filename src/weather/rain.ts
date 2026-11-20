@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-export function createRain(scene: THREE.Scene) {
+export function createRain(scene: THREE.Scene, covers: THREE.Vector4[]) {
   const count = 1100,
     data = new Float32Array(count * 6)
   let seed = 98124
@@ -16,15 +16,27 @@ export function createRain(scene: THREE.Scene) {
   const material = new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
-    uniforms: { time: { value: 0 } },
-    vertexShader: `uniform float time;varying float fade;void main(){
+    uniforms: { time: { value: 0 }, covers: { value: covers } },
+    vertexShader: `uniform float time;varying float fade; varying vec3 drop; void main(){
     float tail=float(gl_VertexID%2); float y0=position.y-tail*.34;
     float y=mod(y0-time*9.5,22.); vec3 p=position;
     p.y=y+tail*.34; p.x+=(y0-y)*.12;
+    drop=p;
     fade=(1.-smoothstep(17.,22.,y))*min(1.,y*2.);
     gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.);
   }`,
-    fragmentShader: `varying float fade;void main(){gl_FragColor=vec4(.57,.69,.82,.22*fade);}`,
+    fragmentShader: `varying float fade;
+    varying vec3 drop;
+    uniform vec4 covers[2];
+    void main(){
+      if(drop.y < 1.97) {
+        for(int i=0; i<2; i++){
+          vec4 c=covers[i];
+          if(all(greaterThanEqual(drop.xz,c.xy)) && all(lessThanEqual(drop.xz,c.zw))) discard;
+        }
+      }
+      gl_FragColor=vec4(.57,.69,.82,.22*fade);
+    }`,
   })
   const drops = new THREE.LineSegments(geo, material)
   drops.renderOrder = 5
