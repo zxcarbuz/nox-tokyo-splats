@@ -20,3 +20,28 @@ export function passes(from: number, target: number, direction: number, step: nu
   const ahead = wrap((target - from) * direction, length)
   return ahead > 0 && ahead <= step
 }
+
+export interface ShopVisit {
+  stop: number
+  heading: number
+  remaining: number
+  cooldownUntil: number
+  roll: () => boolean
+  attempts: number
+  successes: number
+  completed: number
+}
+
+export function attemptVisit(visit: ShopVisit, time: number) {
+  visit.attempts++
+  visit.cooldownUntil = time + 8
+  return visit.roll()
+}
+
+export function advanceVisit(visit: ShopVisit, dt: number, time: number) {
+  visit.remaining = Math.max(0, visit.remaining - dt)
+  if (visit.remaining > 0) return 'visiting'
+  visit.cooldownUntil = time + 8
+  visit.completed++
+  return 'walking'
+}

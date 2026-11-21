@@ -10,3 +10,35 @@ export const seatTop = .42
 export const sitBack = .36
 export const approachSeconds = 1.5
 export const sitSeconds = .95
+
+export type BenchState = 'approaching_bench' | 'sitting_down' | 'seated' | 'standing_up' | 'leaving_bench'
+export interface BenchRest {
+  bench: typeof benches[number]
+  entry: number
+  approachLength: number
+  elapsed: number
+  cooldown: number
+  offset: number
+  sit: number
+}
+
+const afterRestPhase = {
+  approaching_bench: 'sitting_down', sitting_down: 'seated', seated: 'standing_up',
+  standing_up: 'leaving_bench', leaving_bench: 'walking',
+} as const
+
+export function advanceBench(rest: BenchRest, state: BenchState, dt: number, time: number) {
+  rest.elapsed += dt
+  const duration = state === 'seated' ? rest.bench.duration :
+    state === 'approaching_bench' || state === 'leaving_bench' ? approachSeconds : sitSeconds
+  const t = Math.min(1, rest.elapsed / duration)
+  const ease = t * t * (3 - 2 * t)
+  if (state === 'approaching_bench') rest.offset = rest.approachLength * ease
+  if (state === 'sitting_down') rest.sit = ease
+  if (state === 'standing_up') rest.sit = 1 - ease
+  if (state === 'leaving_bench') rest.offset = rest.approachLength * (1 - ease)
+  if (t < 1) return state
+  rest.elapsed = 0
+  if (state === 'leaving_bench') rest.cooldown = time + 24
+  return afterRestPhase[state]
+}

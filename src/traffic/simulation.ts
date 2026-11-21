@@ -1,6 +1,7 @@
-import { advanceShelter, shelters, type ShelterState, type ShelterVisit } from './shelters'
-import { approachSeconds, benches, sitBack, sitSeconds } from './benches'
-import { passes, visitRoll } from './visits'
+import { actionOf, canStart, isRest, isSheltering, movementState, reasonOf, transition, type Behavior } from './behavior'
+import { advanceShelter, shelters, type ShelterVisit } from './shelters'
+import { advanceBench, approachSeconds, benches, sitBack, type BenchRest } from './benches'
+import { advanceVisit, attemptVisit, passes, visitRoll, type ShopVisit } from './visits'
 import { createRingRoute, SIDES, wrap } from './routes'
 import type { Side } from './routes'
 
@@ -24,7 +25,7 @@ const SIDEWALKS = [createRingRoute(8.73, 0.22), createRingRoute(13.65, 0.69)]
 const CROSSING_DISTANCE = 13.65 - 8.73
 
 export type VehiclePhase = 'green' | 'yellow' | 'red'
-export type PedestrianState = 'walking' | 'waiting' | 'crossing' | 'visiting' | 'approaching_bench' | 'sitting_down' | 'seated' | 'standing_up' | 'leaving_bench' | ShelterState
+export type { PedestrianState } from './behavior'
 
 export interface SignalState {
   side: Side
@@ -42,7 +43,7 @@ interface Car {
   braking: boolean
 }
 
-interface Pedestrian {
+interface Pedestrian extends Behavior {
   id: number
   sidewalk: number
   direction: number
@@ -54,10 +55,9 @@ interface Pedestrian {
   phase: number
   offset: number
   umbrella: boolean
-  state: PedestrianState
   shelter?: ShelterVisit
-  rest?: { bench: typeof benches[number]; entry: number; approachLength: number; elapsed: number; cooldown: number; offset: number; sit: number; active: boolean }
-  visit?: { stop: number; heading: number; remaining: number; cooldownUntil: number; approaching: boolean; roll: () => boolean; attempts: number; successes: number; completed: number }
+  rest?: BenchRest
+  visit?: ShopVisit
   gate: number
   crossing: number
   crossingEvery: number
@@ -102,7 +102,8 @@ function makePedestrian(id: number, sidewalk: number, side: number, ahead: numbe
     phase: id * 1.87,
     offset: ((id * 5) % 9 - 4) * 0.13,
     umbrella: id % 5 !== 0,
-    state: 'walking',
+    mode: 'walking',
+    actionSince: 0,
     gate: side,
     crossing: 0,
     crossingEvery: 2 + (id % 2),
@@ -163,7 +164,7 @@ export function createMobilitySimulation(seed = Math.floor(Math.random() * 0x100
     for (const { id, stop } of slots) {
       pedestrians[id].visit = {
         stop, heading: shop === 'Tsukimiken' ? Math.PI : -Math.PI / 2,
-        remaining: 0, approaching: false, cooldownUntil: 0,
+        remaining: 0, cooldownUntil: 0,
         attempts: 0, successes: 0, completed: 0, roll: visitRoll(seed ^ Math.imul(id, 0x85ebca6b)),
       }
     }
@@ -178,7 +179,7 @@ export function createMobilitySimulation(seed = Math.floor(Math.random() * 0x100
     const stop = route.sample(entry)
     const approachLength = Math.hypot(bench.x - stop.x, bench.z - stop.z) - sitBack
     pedestrians[bench.id].rest = { bench, entry, approachLength,
-      elapsed: 0, cooldown: 0, offset: 0, sit: 0, active: false }
+      elapsed: 0, cooldown: 0, offset: 0, sit: 0 }
   }
 
   let raining = false
@@ -188,8 +189,8 @@ export function createMobilitySimulation(seed = Math.floor(Math.random() * 0x100
   }
   function shelterStatus() {
     return shelters.map(({ id, x, z }) => {
-      const { state, shelter } = pedestrians[id]
-      return { id, x, z, state, completed: shelter!.completed, remaining: shelter!.remaining }
+      const { mode, shelter } = pedestrians[id]
+      return { id, x, z, state: movementState(mode), completed: shelter!.completed, remaining: shelter!.remaining }
     })
   }
 
@@ -198,7 +199,7 @@ export function createMobilitySimulation(seed = Math.floor(Math.random() * 0x100
       const ids = slots.map(slot => slot.id)
       const records = ids.map(id => pedestrians[id].visit!)
       return [name, {
-        assigned: ids, current: ids.filter(id => pedestrians[id].state === 'visiting'),
+        assigned: ids, current: ids.filter(id => pedestrians[id].mode === 'visiting'),
         attempts: records.reduce((sum, r) => sum + r.attempts, 0),
         successes: records.reduce((sum, r) => sum + r.successes, 0),
         completed: records.reduce((sum, r) => sum + r.completed, 0),
@@ -217,7 +218,7 @@ export function createMobilitySimulation(seed = Math.floor(Math.random() * 0x100
   function updateCars(dt: number) {
     crossingActive.fill(0)
     for (const pedestrian of pedestrians) {
-      if (pedestrian.state === 'crossing') crossingActive[pedestrian.gate] = 1
+      if (pedestrian.mode === 'crossing') crossingActive[pedestrian.gate] = 1
     }
 
     for (const car of cars) {
@@ -268,110 +269,86 @@ export function createMobilitySimulation(seed = Math.floor(Math.random() * 0x100
     for (const pedestrian of pedestrians) {
       const route = SIDEWALKS[pedestrian.sidewalk]
       const visit = pedestrian.visit
-      const brakingDistance = 0.55
-      if (visit && pedestrian.sidewalk === 0 && pedestrian.state === 'walking' && !visit.approaching
-        && time >= visit.cooldownUntil && passes(pedestrian.distance, visit.stop - pedestrian.direction * brakingDistance,
-          pedestrian.direction, pedestrian.speed * dt, route.length)) {
-        visit.attempts++
-        visit.approaching = visit.roll()
-        visit.cooldownUntil = time + 8
-      }
-      const ahead = visit?.approaching ? distanceAhead(pedestrian.distance, visit.stop, pedestrian.direction, route.length) : Infinity
       const rest = pedestrian.rest
-      const eligible = rest && !rest.active && pedestrian.state === 'walking' && pedestrian.sidewalk === 1 && time >= rest.cooldown
-      const benchAhead = eligible ? distanceAhead(pedestrian.distance, rest.entry, pedestrian.direction, route.length) : Infinity
       const cover = pedestrian.shelter
-      const shelterAhead = cover && raining && pedestrian.state === 'walking' && pedestrian.sidewalk === 0 && time >= cover.readyAt
+      const mode = pedestrian.mode
+      const strideDistance = pedestrian.speed * dt
+      const walkingOnRoute = movementState(mode) === 'walking'
+      // A required gate has priority over elective stops. Crossing clearance
+      // and sufficient green time are still decided by the traffic simulation.
+      const gate = walkingOnRoute ? SIDES.findIndex((_, side) => {
+        const gap = distanceAhead(pedestrian.distance, gateDistance(pedestrian, side), pedestrian.direction, route.length)
+        return gap > .0001 && gap <= strideDistance
+      }) : -1
+      const mustWait = gate >= 0 && pedestrian.passed + 1 >= pedestrian.crossingEvery
+      const brakingDistance = 0.55
+      if (visit && canStart(mode, 'approaching_shop', mustWait) && pedestrian.sidewalk === 0
+        && time >= visit.cooldownUntil && passes(pedestrian.distance, visit.stop - pedestrian.direction * brakingDistance,
+          pedestrian.direction, strideDistance, route.length) && attemptVisit(visit, time)) {
+        transition(pedestrian, 'approaching_shop', time)
+      }
+      const ahead = visit && pedestrian.mode === 'approaching_shop'
+        ? distanceAhead(pedestrian.distance, visit.stop, pedestrian.direction, route.length) : Infinity
+      const benchAhead = rest && canStart(pedestrian.mode, 'approaching_bench', mustWait) && pedestrian.sidewalk === 1 && time >= rest.cooldown
+        ? distanceAhead(pedestrian.distance, rest.entry, pedestrian.direction, route.length) : Infinity
+      const shelterAhead = cover && raining && canStart(pedestrian.mode, 'seeking_shelter', mustWait) && pedestrian.sidewalk === 0 && time >= cover.readyAt
         ? distanceAhead(pedestrian.distance, cover.entry, pedestrian.direction, route.length) : Infinity
       const pace = Math.min(1, Math.sqrt(Math.min(ahead, benchAhead, shelterAhead) / brakingDistance))
       const desiredDistance = pedestrian.speed * pace * dt
-      if (cover && (pedestrian.state === 'seeking_shelter' || pedestrian.state === 'sheltered' || pedestrian.state === 'leaving_shelter')) {
-        pedestrian.state = advanceShelter(cover, pedestrian.state, raining, dt, time)
-      } else if (cover && shelterAhead > 0 && shelterAhead <= desiredDistance) {
-        cover.travelRate = 1
-        pedestrian.distance = cover.entry
-        pedestrian.state = 'seeking_shelter'
-      } else if (rest && rest.active) {
-        rest.elapsed += dt
-        const duration = pedestrian.state === 'seated' ? rest.bench.duration :
-          pedestrian.state === 'approaching_bench' || pedestrian.state === 'leaving_bench' ? approachSeconds : sitSeconds
-        const t = Math.min(1, rest.elapsed/duration)
-        const ease = t*t*(3-2*t)
-        if (pedestrian.state === 'approaching_bench') rest.offset = rest.approachLength * ease
-        if (pedestrian.state === 'sitting_down') rest.sit = ease
-        if (pedestrian.state === 'standing_up') rest.sit = 1-ease
-        if (pedestrian.state === 'leaving_bench') rest.offset = rest.approachLength * (1 - ease)
-        if (t === 1) {
-          rest.elapsed = 0
-          switch (pedestrian.state) {
-            case 'approaching_bench': pedestrian.state = 'sitting_down'; break
-            case 'sitting_down': pedestrian.state = 'seated'; break
-            case 'seated': pedestrian.state = 'standing_up'; break
-            case 'standing_up': pedestrian.state = 'leaving_bench'; break
-            case 'leaving_bench':
-              pedestrian.state = 'walking'
-              rest.active = false
-              rest.cooldown = time + 24
-              break
-          }
-        }
-      } else if (eligible && benchAhead > 0 && benchAhead <= desiredDistance) {
-        pedestrian.distance = rest.entry
-        rest.active = true
-        pedestrian.state = 'approaching_bench'
-      } else if (visit && pedestrian.state === 'visiting') {
-        visit.remaining = Math.max(0, visit.remaining - dt)
-        if (visit.remaining === 0) {
-          pedestrian.state = 'walking'
-          visit.cooldownUntil = time + 8
-          visit.completed++
-        }
-      } else if (visit && ahead <= desiredDistance) {
-        visit.approaching = false
-        visit.remaining = 5
-        visit.successes++
-        pedestrian.distance = visit.stop
-        pedestrian.state = 'visiting'
-      } else if (pedestrian.state === 'crossing') {
+      if (cover && isSheltering(mode)) {
+        transition(pedestrian, advanceShelter(cover, mode, raining, dt, time), time)
+      } else if (rest && isRest(mode)) {
+        transition(pedestrian, advanceBench(rest, mode, dt, time), time)
+      } else if (visit && mode === 'visiting') {
+        transition(pedestrian, advanceVisit(visit, dt, time), time)
+      } else if (mode === 'crossing') {
         pedestrian.crossing += desiredDistance
         if (pedestrian.crossing >= CROSSING_DISTANCE) {
           pedestrian.sidewalk = 1 - pedestrian.sidewalk
           pedestrian.distance = gateDistance(pedestrian, pedestrian.gate)
-          pedestrian.state = 'walking'
           pedestrian.crossing = 0
+          transition(pedestrian, 'walking', time)
         }
-      } else if (pedestrian.state === 'waiting') {
+      } else if (mode === 'waiting') {
         const walkTime = signals[pedestrian.gate].walkTime
         if (!crossingBlocked[pedestrian.gate] && walkTime > CROSSING_DISTANCE / pedestrian.speed + 0.26) {
-          pedestrian.state = 'crossing'
           pedestrian.passed = 0
+          transition(pedestrian, 'crossing', time)
         }
+      } else if (mustWait) {
+        pedestrian.gate = gate
+        pedestrian.passed++
+        pedestrian.distance = gateDistance(pedestrian, gate)
+        transition(pedestrian, 'waiting', time)
+      } else if (cover && shelterAhead > 0 && shelterAhead <= desiredDistance) {
+        cover.travelRate = 1
+        pedestrian.distance = cover.entry
+        transition(pedestrian, 'seeking_shelter', time)
+      } else if (rest && benchAhead > 0 && benchAhead <= desiredDistance) {
+        pedestrian.distance = rest.entry
+        transition(pedestrian, 'approaching_bench', time)
+      } else if (visit && ahead <= desiredDistance) {
+        visit.remaining = 5
+        visit.successes++
+        pedestrian.distance = visit.stop
+        transition(pedestrian, 'visiting', time)
       } else {
-        const gate = SIDES.findIndex((_, side) => {
-          const ahead = distanceAhead(pedestrian.distance, gateDistance(pedestrian, side), pedestrian.direction, route.length)
-          return ahead > 0.0001 && ahead <= desiredDistance
-        })
-        if (gate >= 0 && ++pedestrian.passed >= pedestrian.crossingEvery) {
-          pedestrian.gate = gate
-          pedestrian.distance = gateDistance(pedestrian, gate)
-          pedestrian.state = 'waiting'
-        } else {
-          pedestrian.distance = wrap(pedestrian.distance + desiredDistance * pedestrian.direction, route.length)
-        }
+        if (gate >= 0 && passes(pedestrian.distance, gateDistance(pedestrian, gate), pedestrian.direction, desiredDistance, route.length)) pedestrian.passed++
+        pedestrian.distance = wrap(pedestrian.distance + desiredDistance * pedestrian.direction, route.length)
       }
 
       const { heading } = pedestrianPose(pedestrian)
       const delta = wrap(heading - pedestrian.heading + Math.PI, Math.PI * 2) - Math.PI
       pedestrian.heading += delta * Math.min(1, dt * 9)
-      const moving = pedestrian.state === 'walking' || pedestrian.state === 'crossing'
-      const approaching = pedestrian.state === 'approaching_bench' || pedestrian.state === 'leaving_bench'
-      const shelterWalk = pedestrian.state === 'seeking_shelter' || pedestrian.state === 'leaving_shelter'
+      const moving = movementState(pedestrian.mode) === 'walking' || pedestrian.mode === 'crossing'
+      const approaching = pedestrian.mode === 'approaching_bench' || pedestrian.mode === 'leaving_bench'
+      const shelterWalk = pedestrian.mode === 'seeking_shelter' || pedestrian.mode === 'leaving_shelter'
       const shelterPace = shelterWalk && cover ? .7 * Math.abs(cover.travelRate) * Math.sin(Math.PI * cover.progress) : 0
       const detourPace = approaching && rest ? Math.sin(Math.PI * rest.elapsed / approachSeconds) * .75 : shelterPace
       if (approaching || shelterWalk) pedestrian.phase += detourPace * dt * 9
       if (moving) pedestrian.phase += desiredDistance * 9
-      if (pedestrian.state === 'sheltered') pedestrian.stride = 0
-      const lookout = pedestrian.state === 'waiting' ? 1 : 0
+      if (pedestrian.mode === 'sheltered') pedestrian.stride = 0
+      const lookout = pedestrian.mode === 'waiting' ? 1 : 0
       pedestrian.lookout += (lookout - pedestrian.lookout) * -Math.expm1(-dt * 3)
       const targetStride = moving ? pace : detourPace
       pedestrian.stride += (targetStride - pedestrian.stride) * Math.min(1, dt * 8)
@@ -419,7 +396,7 @@ export function createMobilitySimulation(seed = Math.floor(Math.random() * 0x100
           y,
           z,
           heading: pedestrian.heading,
-          state: pedestrian.state,
+          state: movementState(pedestrian.mode),
           lookout: pedestrian.lookout,
           sit: pedestrian.rest?.sit ?? 0,
           stride: pedestrian.stride,
@@ -435,7 +412,12 @@ export function createMobilitySimulation(seed = Math.floor(Math.random() * 0x100
     }
   }
 
-  return { snapshot, update, visits, shelterStatus, setRain(on: boolean) { raining = on }, get raining() { return raining } }
+  function behavior() {
+    return pedestrians.map(({ id, mode, actionSince }) => ({
+      id, action: actionOf(mode), state: movementState(mode), reason: reasonOf(mode), actionSince,
+    }))
+  }
+  return { snapshot, behavior, update, visits, shelterStatus, setRain(on: boolean) { raining = on }, get raining() { return raining } }
 }
 
 function pedestrianPose(pedestrian: Pedestrian) {
@@ -444,22 +426,22 @@ function pedestrianPose(pedestrian: Pedestrian) {
   const direction = pedestrian.direction < 0 ? Math.PI : 0
   const rest = pedestrian.rest
   const cover = pedestrian.shelter
-  if (cover && (pedestrian.state === 'seeking_shelter' || pedestrian.state === 'sheltered' || pedestrian.state === 'leaving_shelter')) {
+  if (cover && isSheltering(pedestrian.mode)) {
     const t = cover.progress
     const blend = t * t * (3 - 2 * t)
-    const heading = cover.site.outward + (pedestrian.state === 'seeking_shelter' ? Math.PI : 0)
+    const heading = cover.site.outward + (pedestrian.mode === 'seeking_shelter' ? Math.PI : 0)
     return { x: position.x + (cover.site.x - position.x) * blend, y: .12,
       z: position.z + (cover.site.z - position.z) * blend, heading }
   }
-  if (rest?.active) {
+  if (rest && isRest(pedestrian.mode)) {
     const heading = rest.bench.heading
     const offset = rest.offset + sitBack * rest.sit
-    const turning = pedestrian.state === 'approaching_bench' && rest.elapsed < .85
+    const turning = pedestrian.mode === 'approaching_bench' && rest.elapsed < .85
     return { x: position.x - Math.sin(heading)*offset, z: position.z - Math.cos(heading)*offset,
       y: .12, heading: turning ? heading + Math.PI : heading }
   }
-  if (pedestrian.state === 'visiting' && pedestrian.visit) return { ...position, y: 0.12, heading: pedestrian.visit.heading }
-  if (pedestrian.state === 'walking') {
+  if (pedestrian.mode === 'visiting' && pedestrian.visit) return { ...position, y: 0.12, heading: pedestrian.visit.heading }
+  if (movementState(pedestrian.mode) === 'walking') {
     return { ...position, y: 0.12, heading: position.heading + direction }
   }
   const destination = SIDEWALKS[1 - pedestrian.sidewalk].sample(

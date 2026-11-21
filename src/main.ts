@@ -229,6 +229,7 @@ function start() {
             ...rig.controls.target.toArray(),
           ],
           splats: splats.activeCount,
+          behavior: mobility.behavior(),
           visits: mobility.visits(),
           weather: mobility.weather(),
           sourceSplats: splats.count,
