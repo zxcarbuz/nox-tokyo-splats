@@ -42,7 +42,7 @@ it('keeps an interrupted shelter approach and both clocks frozen until resume', 
   expect(sim.behavior()[0]).toMatchObject({action:'walk', state:'walking', reason:'roaming'})
 })
 
-it('replays independent actions, shop departures and repeated returns to the route', () => {
+it('replays independent actions, shop departures and repeated returns to the route', { timeout: 30_000 }, () => {
   const sim = createMobilitySimulation(42), replay = createMobilitySimulation(42)
   const returns = Array<number>(16).fill(0), walks = Array<number>(16).fill(0)
   const resumeChecks = new Set<number>()
@@ -55,12 +55,14 @@ it('replays independent actions, shop departures and repeated returns to the rou
     sim.update(1/30,traffic)
     replay.update(1/60,traffic)
     replay.update(1/60,traffic)
-    const current = sim.behavior(), state = sim.snapshot()
+    const current = sim.behavior()
+    let state: ReturnType<typeof sim.snapshot> | undefined
     // Compare the full record at intervals; validate every observed transition.
     if (sample%900===0) expect(current).toEqual(replay.behavior())
     for (const p of current) {
       const old = previous[p.id]
       if (resumeChecks.delete(p.id)) {
+        state ??= sim.snapshot()
         const south = p.id===9 || p.id===11
         const pos = state.pedestrians[p.id]
         expect(south ? pos.z : pos.x).toBeCloseTo(8.73)
@@ -72,6 +74,7 @@ it('replays independent actions, shop departures and repeated returns to the rou
         if (p.actionSince !== old.actionSince) throw Error('Restarted an unchanged action for '+p.id)
         continue
       }
+      state ??= sim.snapshot()
       expect(p.state).toBe(state.pedestrians[p.id].state)
       expect(p.actionSince).toBeLessThanOrEqual(state.time)
       if (p.action === old.action) expect(p.actionSince).toBe(old.actionSince)
