@@ -1,3 +1,4 @@
+import { setupCitizenInspector } from './ui/citizen-inspector'
 import * as THREE from 'three'
 import { buildCity } from './city/city'
 import { buildMobility } from './traffic/mobility'
@@ -6,6 +7,8 @@ import { cameraRig } from './camera/rig'
 import { createRain } from './weather/rain'
 import { el, setupControls, type Toggle } from './ui/controls'
 import './ui/style.css'
+
+declare const __NOX_VERSION__: string
 
 type Quality = 'low' | 'medium' | 'high'
 setupControls()
@@ -80,6 +83,17 @@ function start() {
   splats.build(scene)
   const mobility = buildMobility(scene),
     rain = createRain(scene, city.rainCovers)
+  const refreshInspector = setupCitizenInspector()
+  let eventSequence = -1
+  let inspectorEvents: ReturnType<typeof mobility.events> = []
+  function refreshCitizens() {
+    if (!refreshInspector) return
+    if (eventSequence !== mobility.eventSequence) {
+      eventSequence = mobility.eventSequence
+      inspectorEvents = mobility.events()
+    }
+    refreshInspector({ citizens: mobility.citizens(), events: inspectorEvents })
+  }
   const debugVisits = new URLSearchParams(location.search).get('debug') === 'visits'
     ? document.createElement('section') : null
   function refreshVisits() {
@@ -201,6 +215,7 @@ function start() {
       elapsed += seconds
       if (elapsed >= 0.75) {
         refreshVisits()
+        refreshCitizens()
         fps = frames / elapsed
         el('fps').textContent = state.pause ? '—' : fps.toFixed(fps < 10 ? 1 : 0)
         el('draws').textContent = String(renderer.info.render.calls)
@@ -230,6 +245,9 @@ function start() {
           ],
           splats: splats.activeCount,
           behavior: mobility.behavior(),
+          citizens: mobility.citizens(),
+          events: mobility.events(),
+          version: __NOX_VERSION__,
           visits: mobility.visits(),
           weather: mobility.weather(),
           sourceSplats: splats.count,
@@ -244,6 +262,7 @@ function start() {
       },
     },
   })
+  refreshCitizens()
   city.update(0)
   mobility.update(0, true)
   requestAnimationFrame(frame)

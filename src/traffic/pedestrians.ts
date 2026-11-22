@@ -140,9 +140,10 @@ export function buildPedestrians(group: THREE.Group, pedestrians: Pedestrians) {
         placeMovingPart(shoes, slot, frame, [.09 * side, footY, footZ + .04, Math.min(0, legStep) * .34])
         const carriesUmbrella = pedestrian.umbrella && limb === 1
         const gesture = pulse * pulse * idle * (pedestrian.umbrella ? .70 : 1) * (side < 0 ? 1 : .64)
-        const handX = carriesUmbrella ? gripX : sway + side * (.166 + gesture * .028)
-        const handY = carriesUmbrella ? gripY : .562 + bounce + breath + gesture * .077 + sit * .08
-        const handZ = carriesUmbrella ? gripZ : -legStep * .137 + gesture * .09 + sit * .16
+        const bite = !carriesUmbrella && limb === 0 && pedestrian.eating ? Math.max(0, Math.sin(clock * 2.4)) ** 2 * idle : 0
+        const handX = carriesUmbrella ? gripX : sway + side * (.166 + gesture * .028 - .065 * bite)
+        const handY = carriesUmbrella ? gripY : .562 + bounce + breath + gesture * .077 + sit * .08 + .34 * bite
+        const handZ = carriesUmbrella ? gripZ : -legStep * .137 + gesture * .09 + sit * .16 + .17 * bite
         const elbowX = sway + side * (.178 + gesture * .035)
         const elbowY = .715 + bounce + breath
         const elbowZ = carriesUmbrella ? .06 : -.028 - legStep * .062

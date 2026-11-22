@@ -28,5 +28,7 @@ export function buildMobility(scene: THREE.Scene) {
 
   update(0, true)
   return { update, behavior: simulation.behavior, snapshot: simulation.snapshot, visits: simulation.visits, setRain: simulation.setRain,
+    citizens: simulation.citizens, events: simulation.events,
+    get eventSequence() { return simulation.eventSequence },
     weather: () => ({ raining: simulation.raining, shelters: simulation.shelterStatus() }) }
 }

@@ -43,3 +43,5 @@ export function createRingRoute(edge: number, cornerRadius: number) {
     gate: (side: number) => side * sideLength + straight / 2,
   }
 }
+
+export const SIDEWALKS = [createRingRoute(8.73, 0.22), createRingRoute(13.65, 0.69)] as const

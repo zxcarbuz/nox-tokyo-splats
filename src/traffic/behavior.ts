@@ -1,20 +1,21 @@
 import type { BenchState } from './benches'
 import type { ShelterState } from './shelters'
 
-export type PedestrianState = 'walking' | 'waiting' | 'crossing' | 'visiting' | BenchState | ShelterState
+export type PedestrianState = 'walking' | 'waiting' | 'crossing' | 'visiting' | 'interacting' | BenchState | ShelterState
 // A committed shopper still uses the ordinary walking pose until arriving at the stop.
 export type BehaviorPhase = PedestrianState | 'approaching_shop'
-export type Action = 'walk' | 'wait' | 'visit' | 'rest' | 'shelter'
+export type Action = 'walk' | 'wait' | 'visit' | 'rest' | 'shelter' | 'interact'
 export interface Behavior {
   mode: BehaviorPhase
   actionSince: number
 }
 
 const rules: Record<BehaviorPhase, { action: Action; next: readonly BehaviorPhase[] }> = {
-  walking: { action: 'walk', next: ['waiting', 'approaching_shop', 'approaching_bench', 'seeking_shelter'] },
+  walking: { action: 'walk', next: ['waiting', 'approaching_shop', 'approaching_bench', 'seeking_shelter', 'interacting'] },
   waiting: { action: 'wait', next: ['crossing'] },
   crossing: { action: 'walk', next: ['walking'] },
   approaching_shop: { action: 'visit', next: ['visiting', 'waiting'] },
+  interacting: { action: 'interact', next: ['walking'] },
   visiting: { action: 'visit', next: ['walking'] },
   approaching_bench: { action: 'rest', next: ['sitting_down'] },
   sitting_down: { action: 'rest', next: ['seated'] },
@@ -26,7 +27,7 @@ const rules: Record<BehaviorPhase, { action: Action; next: readonly BehaviorPhas
   leaving_shelter: { action: 'shelter', next: ['walking'] },
 }
 
-const reasons = { walk: 'roaming', wait: 'traffic_signal', visit: 'shop_visit', rest: 'bench_rest', shelter: 'rain_shelter' } as const
+const reasons = { walk: 'roaming', wait: 'traffic_signal', visit: 'shop_visit', rest: 'bench_rest', shelter: 'rain_shelter', interact: 'citizen_goal' } as const
 
 export const movementState = (mode: BehaviorPhase): PedestrianState => mode === 'approaching_shop' ? 'walking' : mode
 export const actionOf = (mode: BehaviorPhase) => rules[mode].action
@@ -40,9 +41,11 @@ export function canStart(mode: BehaviorPhase, entry: OptionalEntry, mustWait: bo
   return !mustWait && canTransition(mode, entry)
 }
 
-export function transition(actor: Behavior, next: BehaviorPhase, time: number) {
+export function transition(actor: Behavior, next: BehaviorPhase, time: number, abandonGate = false) {
   if (actor.mode === next) return
-  if (!canTransition(actor.mode, next)) throw new Error(`Invalid pedestrian transition: ${actor.mode} -> ${next}`)
+  // A planned route may abandon a gate while the walker is still on the curb.
+  const curbDeparture = abandonGate && actor.mode === 'waiting' && next === 'walking'
+  if (!curbDeparture && !canTransition(actor.mode, next)) throw new Error(`Invalid pedestrian transition: ${actor.mode} -> ${next}`)
   if (actionOf(actor.mode) !== actionOf(next)) actor.actionSince = time
   actor.mode = next
 }
